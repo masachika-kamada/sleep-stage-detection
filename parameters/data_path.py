@@ -1,0 +1,5 @@
+DIR_INPUT = "data/input"
+DIR_EDF = f"{DIR_INPUT}/edf_data"
+DIR_ARRAYS = "data/arrays"
+DIR_OUTPUT = "data/output"
+DIR_PROCESSED = "data/processed"

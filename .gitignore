@@ -1,3 +1,2 @@
-*.csv
-*.edf
-*.xlsx
+data/
+__pycache__/
