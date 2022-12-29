@@ -1,0 +1,52 @@
+# config.yaml
+general:
+  debug: False
+  exp_num: "002_smooth5e2_"
+  device: 0
+  task:
+    name: "clf" #"mlti_clf"
+loss:
+  name: "ce"
+  weights: 0
+  smooth_a: 0.05
+  focal_gamma: 0
+
+augmentation:
+  specaug_time: 0
+  specaug_frec: 0
+  crop_len: 20
+  add_gause: 0.5
+  max_noise_amplitude: 0.15
+  add_g_snr: 0
+  add_p_snr: 0
+  min_snr: 5
+  max_snr: 20
+  swap_axis: 0
+  t_strech: 0 #error
+  t_shift: 0
+  t_shift_mode: "zero" #"cocat" "repalce"
+  v_cont: 0
+  v_mode: "uniform" #"uniform", "fade", "cosine", "sine"]
+  crop_total: 700
+#
+model:
+  name: "tf_efficientnet_b0_ns"
+  pretrain: -1
+  pooling: "avg"
+  n_classes: 5
+  hidden_dim: 128
+
+tta:
+  do: False
+
+mixup: 0.5
+
+train:
+  optim: "adam"
+  lr: 0.001
+  epochs: 5
+  batch_size: 128
+  scheduler:
+    name: "none" #"none","cosine_warm","cosine"
+    min_lr: 0.00001
+    t_0: 3
