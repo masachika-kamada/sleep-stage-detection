@@ -10,8 +10,7 @@ import timm
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig
-from sklearn.metrics import (accuracy_score, classification_report,
-                             confusion_matrix, roc_auc_score)
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import (CosineAnnealingLR,
                                       CosineAnnealingWarmRestarts,
@@ -20,8 +19,12 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from parameters.data_path import DIR_INPUT, DIR_OUTPUT, DIR_PROCESSED
+from parameters.variables import ID2LABEL
 from utils.conv_stem import stft_conv
 from utils.datasets import TestDataset, TrainDataset
+from utils.metrics import AUC
+from utils.mixup import mixup_data, mixup_criterion
+from utils.loss_func import FocalLoss_CE
 
 
 def seed_torch(seed=42):
@@ -50,72 +53,29 @@ def inference(model, test_loader, device, CFG):
     return probs
 
 
-def AUC(y_true, y_pred, onehot=False):
-    if y_pred.shape[1] == 2:
-        auc = roc_auc_score(y_true, y_pred[:, 1])
-    else:
-        if onehot:
-            auc = 0
-            n_col = y_pred.shape[1]
-            print(n_col, y_true[:, i].shape)
-            for i in range(n_col):
-                auc += roc_auc_score(y_true[:, i], y_pred[:, i]) / n_col
-
-        else:
-            auc = roc_auc_score(y_true, y_pred, multi_class="ovr")
-    return auc
-
-
-def mixup_data(x, y, alpha=1.0, use_cuda=True):
-    """Returns mixed inputs, pairs of targets, and lambda"""
-    if alpha > 0:
-        lam = np.random.beta(alpha, alpha)
-    else:
-        lam = 1
-    batch_size = x.shape[0]  # bs,seq_len,depth
-    if use_cuda:
-        index = torch.randperm(batch_size).cuda()
-    else:
-        index = torch.randperm(batch_size)
-    mixed_x = lam * x + (1 - lam) * x[index, :, :]
-    y_a, y_b = y, y[index]
-    return mixed_x, y_a, y_b, lam
-
-
-def mixup_criterion(criterion, pred, y_a, y_b, lam):
-    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
-
-
-def get_swap_dict(d):
-    return {v: k for k, v in d.items()}
-
-
 def train_fn(CFG, fold, folds):
     torch.cuda.set_device(CFG.general.device)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"\n### fold: {fold} ###\n")
     trn_idx = folds[folds["fold"] != fold].index
     val_idx = folds[folds["fold"] == fold].index
-    train_dataset = TrainDataset(folds.loc[trn_idx].reset_index(drop=True), train=True, CFG=CFG)  #
+    train_dataset = TrainDataset(folds.loc[trn_idx].reset_index(drop=True), train=True, CFG=CFG)
     val_folds = folds.loc[val_idx].reset_index(drop=True)
-    valid_dataset = TrainDataset(folds.loc[val_idx].reset_index(drop=True), train=False, CFG=CFG)  #
+    valid_dataset = TrainDataset(folds.loc[val_idx].reset_index(drop=True), train=False, CFG=CFG)
 
     train_loader = DataLoader(train_dataset, batch_size=CFG.train.batch_size, shuffle=True, num_workers=8)
     valid_loader = DataLoader(valid_dataset, batch_size=CFG.train.batch_size * 2, shuffle=False, num_workers=8)
 
     # === model select ===
-    # STFTしてから2d cnn
     model = timm.create_model(CFG.model.name, pretrained=True, in_chans=7, num_classes=5)
     model.conv_stem = stft_conv(CFG)  # stft_conv_more(CFG)
     # model.conv_stem = cwt_conv(CFG)
     model.to(device)
     print(model.conv_stem)
-    # ============
 
     # === optim select ===
     if CFG.train.optim == "adam":
         optimizer = AdamW(model.parameters(), lr=CFG.train.lr, amsgrad=False)  # CFG.train.lr
-    # ============
 
     # === scheduler select ===
     if CFG.train.scheduler.name == "cosine":
@@ -124,13 +84,13 @@ def train_fn(CFG, fold, folds):
         scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=CFG.train.scheduler.t_0, T_mult=1, eta_min=CFG.train.scheduler.min_lr, last_epoch=-1)
     elif CFG.train.scheduler.name == "reduce":
         scheduler = ReduceLROnPlateau(optimizer, "min", factor=0.5, patience=2, verbose=True, eps=1e-6)
-    # ============
+
     # === loss select ===
     if CFG.loss.name == "ce":
         criterion = nn.CrossEntropyLoss(label_smoothing=CFG.loss.smooth_a)
     elif CFG.loss.name == "focal":
         criterion = FocalLoss_CE(alpha=1, gamma=CFG.loss.focal_gamma)
-    # ============
+
     best_score = 0
     best_preds = None
 
@@ -195,14 +155,14 @@ def train_fn(CFG, fold, folds):
             best_score = score
             best_preds = preds
             log.info(f"  Epoch {epoch+1} - Save Best Score: {best_score:.4f}")
-            torch.save(model.state_dict(), f"{DIR_OUTPUT}/weights/fold{fold}_{CFG.general.exp_num}_baseline.pth")
+            torch.save(model.state_dict(), f"{DIR_OUTPUT}/weights/fold{fold}_{CFG.general.exp_num}.pth")
         for i in range(5):
             col = f"pred_{i}"
             val_folds[col] = best_preds[:, i]
     return best_preds, valid_labels, val_folds
 
 
-def submit(test, CFG):
+def pred_fn(test, CFG):
     print("run inference")
     torch.cuda.set_device(CFG.general.device)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -210,7 +170,7 @@ def submit(test, CFG):
     test_loader = DataLoader(test_dataset, batch_size=CFG.train.batch_size * 2, shuffle=False)
     probs = []
     for fold in range(5):
-        weights_path = f"{DIR_OUTPUT}/weights/fold{fold}_{CFG.general.exp_num}_baseline.pth"
+        weights_path = f"{DIR_OUTPUT}/weights/fold{fold}_{CFG.general.exp_num}.pth"
         model = timm.create_model(CFG.model.name, pretrained=True, num_classes=5)
         model.conv_stem = stft_conv(CFG)  # stft_conv_more(CFG)
         state_dict = torch.load(weights_path, map_location=device)
@@ -222,11 +182,10 @@ def submit(test, CFG):
     return probs
 
 
-config_path = "parameters/"
 log = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path=config_path, config_name="config.yaml")
+@hydra.main(version_base=None, config_path="parameters/", config_name="config.yaml")
 def main(CFG: DictConfig) -> None:
 
     seed_torch(seed=42)
@@ -259,23 +218,17 @@ def main(CFG: DictConfig) -> None:
     log.info(f"\n=== AUC(CV) ===\n{AUC(valid_labels, preds)}")
     oof.to_csv(f"{DIR_OUTPUT}/oof_{CFG.general.exp_num}.csv", index=False)
 
-    pred = submit(test, CFG)
+    pred = pred_fn(test, CFG)
 
     for i in range(5):
         col = f"pred_{i}"
         test[col] = pred[:, i]
     test.to_csv(f"{DIR_OUTPUT}/predict_{CFG.general.exp_num}.csv", index=False)
     th_pred = np.argmax(pred, axis=1)
+
     submission = pd.read_csv(f"{DIR_INPUT}/sample_submission.csv")
-    dic = {"Sleep stage 3/4": 3, "Sleep stage 2": 2, "Sleep stage W": 0, "Sleep stage R": 4, "Sleep stage 1": 1}
-
-    d_swap = get_swap_dict(dic)
-
-    def func2(x):
-        return d_swap[x]
-
     submission["condition"] = th_pred
-    submission["condition"] = submission["condition"].apply(func2)
+    submission["condition"] = submission["condition"].map(ID2LABEL)
     submission.to_csv(f"{DIR_OUTPUT}/submit_{CFG.general.exp_num}.csv", index=False)
 
 
