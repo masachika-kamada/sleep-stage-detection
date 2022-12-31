@@ -1,7 +1,6 @@
-# config.yaml
 general:
   debug: False
-  exp_num: "002_smooth5e2_"
+  exp_num: "ch7_221231"
   device: 0
   task:
     name: "clf" #"mlti_clf"
@@ -28,7 +27,7 @@ augmentation:
   v_cont: 0
   v_mode: "uniform" #"uniform", "fade", "cosine", "sine"]
   crop_total: 700
-#
+
 model:
   name: "tf_efficientnet_b0_ns"
   pretrain: -1

@@ -1,18 +1,11 @@
-import datetime
 import gc
 import logging
 import math
 import os
 import random
-import sys
 import time
-from collections import Counter, defaultdict
 from contextlib import contextmanager
-from functools import partial
-from pathlib import Path
 
-import albumentations as A
-import cv2
 import hydra
 import matplotlib.pyplot as plt
 import numpy as np
@@ -50,7 +43,7 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score, roc_auc_score
 
-from parameters.data_path import DIR_INPUT, DIR_ARRAYS, DIR_PROCESSED
+from parameters.data_path import DIR_INPUT, DIR_OUTPUT, DIR_ARRAYS, DIR_PROCESSED
 
 
 @contextmanager
@@ -132,7 +125,7 @@ class TrainDataset(Dataset):
         epoch = self.df["epoch"].values[idx]
         label = self.df["label"].values[idx]
         seq = np.load(f"{DIR_ARRAYS}/{id_}_{epoch}.npy")  # 3000,7
-        seq = seq[:, :2]
+        # seq = seq[:, :2]
 
         if self.CFG.augmentation.crop_len > 0:
             l_ = np.random.randint(self.CFG.augmentation.crop_len)
@@ -376,116 +369,6 @@ class TransformerModel(nn.Module):
         return exam, feature
 
 
-class transformer_inoichi(nn.Module):
-    def __init__(
-        self,
-        in_size=3,  # d_model
-        dim_feedforward=16,  # hidden
-        n_heads=4,
-        n_encoders=4,
-        num_outputs=8,
-        use_age=False,
-        max_site_num=7,
-        use_sex=False,
-        use_age_diff=False,
-        use_position_enc=True,
-        pool="avg",
-        embed=False,
-    ):
-        super(transformer_inoichi, self).__init__()
-        self.in_size = in_size
-        self.do_embed = embed
-        self.layer1 = nn.Sequential(
-            nn.Conv1d(12, in_size, kernel_size=11, stride=1, padding=5, bias=False),
-            nn.BatchNorm1d(in_size),
-            # nn.ReLU(inplace=True),
-            Mish(),
-            # SEModule(dim, dim//4),
-        )
-        self.layer2 = nn.Sequential(
-            nn.Conv1d(12, in_size, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm1d(in_size),
-            # nn.ReLU(inplace=True),
-            Mish(),
-            # SEModule(dim, dim//4),
-        )
-        self.layer3 = nn.Sequential(
-            nn.Conv1d(12, in_size, kernel_size=31, stride=1, padding=15, bias=False),
-            nn.BatchNorm1d(in_size),
-            # nn.ReLU(inplace=True),
-            Mish(),
-            # SEModule(dim, dim//4),
-        )
-        self.layer4 = nn.Sequential(
-            nn.Conv1d(12, in_size, kernel_size=21, stride=1, padding=10, bias=False),
-            nn.BatchNorm1d(in_size),
-            # nn.ReLU(inplace=True),
-            Mish(),
-            # SEModule(dim, dim//4),
-        )
-        self.bottle_neck = nn.Sequential(
-            nn.Conv1d(in_size * 4, in_size, kernel_size=1, stride=1, padding=0, bias=False),
-            # SEModule(dim, dim//4),
-        )
-        # in_size *=4
-
-        self.encoder_layer = nn.TransformerEncoderLayer(in_size, n_heads, dim_feedforward=dim_feedforward)  # d_model(単語の次元..1280)
-        #        self.decoder_layer =nn.TransformerDecoderLayer(in_size, 4, dim_feedforward=in_size)
-        self.encoder = nn.TransformerEncoder(self.encoder_layer, n_encoders)
-        #        self.decoder=nn.TransformerDecoder(self.decoder_layer, 2)
-        self.egg_emb = nn.Sequential(nn.Linear(12, 16), nn.ReLU(), nn.Linear(16, in_size))
-        # meta_feature(csvから取ってくるやつ) ==========================
-        self.sex_embd = nn.Embedding(2, in_size) if use_sex else DummyEmbd(in_size)
-        self.age_embd = nn.Sequential(NoopAddDim(), nn.Linear(1, 16), nn.ReLU(), nn.Linear(16, in_size)) if use_age else DummyEmbd(in_size)
-        self.site_embd = nn.Embedding(max_site_num, in_size) if max_site_num > 0 else DummyEmbd(in_size)
-        self.age_diff_embd = nn.Sequential(NoopAddDim(), nn.Linear(1, 16), nn.ReLU(), nn.Linear(16, in_size)) if use_age else DummyEmbd(in_size)
-        # ==========================
-        if pool in ("avg", "concat", "gem", "max"):
-            self.pool = SEQ_POOLING[pool]
-            if pool == "concat":
-                self.exam_classifier = nn.Linear(in_size * 2, num_outputs)
-            else:
-                self.exam_classifier = nn.Linear(in_size, num_outputs)
-        else:
-            self.pool = None
-            self.exam_classifier = nn.Linear(in_size, num_outputs)
-        # self.image_classifier = nn.Linear(in_size, num_outputs)
-        self.pos_embd = calc_positional_encoder(12, max_seq_len=700) if use_position_enc else None
-
-        self.gru = nn.GRU(12, in_size // 2, bidirectional=True, batch_first=True, num_layers=2)
-        self.gru_afetr = nn.GRU(in_size, in_size, bidirectional=False, batch_first=True, num_layers=2)
-
-    # @time_function_execution
-    def forward(self, x, sex=None, age=None, site=None, age_diff=None, mask=None):
-        if self.pos_embd is not None:
-            if self.pos_embd.device != x.device:
-                self.pos_embd = self.pos_embd.to(x.device)
-        # print(self.pos_embd[:x.shape[1]][None].shape,x.shape)
-        x = x if self.pos_embd is None else x + self.pos_embd[: x.shape[1]][None]
-        x = x if mask is None else x * mask.unsqueeze(-1)
-        # x = x if self.do_embed ==False else self.layer1(x.permute(0, 2, 1)).permute(0, 2, 1)#self.egg_emb(x)
-        x = x if self.do_embed is False else self.gru(x)[0]  # self.egg_emb(x)
-
-        x0 = self.layer1(x.permute(0, 2, 1)).permute(0, 2, 1)
-        x1 = self.layer2(x.permute(0, 2, 1)).permute(0, 2, 1)
-        x2 = self.layer3(x.permute(0, 2, 1)).permute(0, 2, 1)
-        x3 = self.layer4(x.permute(0, 2, 1)).permute(0, 2, 1)
-
-        x = torch.cat([x0, x1, x2, x3], axis=1)
-        x = self.bottle_neck(x)
-        x = self.encoder(x)  # ,mask=s_mask #bs,len,depth
-        # x = self.gru_afetr(x)[0]
-        if self.pool:
-            pooled = self.pool(x.permute(0, 2, 1))
-            feature = pooled[:, :, 0]
-            exam = self.exam_classifier(feature)
-        else:
-            feature = x[:, 0, :]
-            exam = self.exam_classifier(feature)  # 0番目の"単語"にクラス分類のための特徴が集約されるように学習
-        # image = self.image_classifier(x[:,:,:])
-        return exam  # ,feature
-
-
 SEQ_POOLING = {"gem": GeM(dim=1), "concat": AdaptiveConcatPool1d(), "avg": nn.AdaptiveAvgPool1d(1), "max": nn.AdaptiveMaxPool1d(1)}
 
 
@@ -501,50 +384,6 @@ class Mish(nn.Module):
         Forward pass of the function.
         """
         return input * torch.tanh(F.softplus(input))
-
-
-class gru_model(nn.Module):
-    def __init__(self, input_ch, hidden_size=64, pool="gem", embed=False):
-        super().__init__()
-
-        # layer norm drop out をいれる
-        self.layer1 = nn.Sequential(
-            nn.Conv1d(input_ch, input_ch * 2, kernel_size=9, stride=1, padding=0, bias=False),
-            nn.BatchNorm1d(input_ch * 2),
-            # nn.ReLU(inplace=True),
-            Mish(),
-            # SEModule(dim, dim//4),
-        )
-        self.do_embed = embed
-        if self.do_embed:
-            input_ch *= 2
-        self.gru = nn.GRU(input_ch, hidden_size, bidirectional=True, batch_first=True, num_layers=2)
-        self.gru2 = nn.GRU(hidden_size * 2, hidden_size, bidirectional=True, batch_first=True, num_layers=2)
-        self.gru3 = nn.GRU(hidden_size * 2, hidden_size, bidirectional=True, batch_first=True, num_layers=2)
-        if pool in ("avg", "concat", "gem", "max"):
-            self.pool = SEQ_POOLING[pool]
-            if pool == "concat":
-                hidden_size *= 2
-        else:
-            self.pool = None
-        self.exam_predictor = nn.Linear(hidden_size * 2, 5)
-
-    # @time_function_execution
-    def forward(self, embeds):
-        # embeds = embeds.permute(0, 2, 1)
-        # print(embeds.size())#4, 128(ここの長さを変えていく), 1280]
-        embeds = embeds if self.do_embed is False else self.layer1(embeds.permute(0, 2, 1)).permute(0, 2, 1)
-        embeds, _ = self.gru(embeds)
-        embeds, _ = self.gru2(embeds)
-
-        embeds, _ = self.gru3(embeds)
-
-        if self.pool:
-            embeds = self.pool(embeds.permute(0, 2, 1))[:, :, 0]
-
-        exam_pred = self.exam_predictor(embeds)
-        # print(exam_pred.size())
-        return exam_pred
 
 
 class SEModule(nn.Module):
@@ -564,85 +403,6 @@ class SEModule(nn.Module):
         x = self.fc2(x)
         x = self.sigmoid(x)
         return module_input * x
-
-
-class CNN_1d(nn.Module):
-    def __init__(self, num_classes=400, dim=16, input_ch=128, verbose=False, pool="concat"):
-        super(CNN_1d, self).__init__()
-        self.layer1 = nn.Sequential(
-            nn.Conv1d(input_ch, dim, kernel_size=9, stride=1, padding=0, bias=False),
-            nn.BatchNorm1d(dim),
-            # nn.ReLU(inplace=True),
-            Mish(),
-            # SEModule(dim, dim//4),
-        )
-        self.layer2 = nn.Sequential(
-            nn.Conv1d(dim, dim * 2, kernel_size=7, stride=1, padding=0, bias=False),
-            nn.BatchNorm1d(dim * 2),
-            # nn.ReLU(inplace=True),
-            Mish(),
-            # SEModule(dim*2, dim*2//4),
-        )
-        self.layer3 = nn.Sequential(
-            nn.Conv1d(dim * 2, dim * 2, kernel_size=7, stride=1, padding=3, bias=False),
-            nn.BatchNorm1d(dim * 2),
-            # nn.ReLU(inplace=True),
-            Mish(),
-            # SEModule(dim*2, dim*2//4),
-        )
-        self.layer4 = nn.Sequential(
-            nn.Conv1d(dim * 2, dim * 2, kernel_size=7, stride=1, padding=3, bias=False),
-            nn.BatchNorm1d(dim * 2),
-            # nn.ReLU(inplace=True),
-            Mish(),
-            # SEModule(dim*2, dim*2//4),
-        )
-        self.layer5 = nn.Sequential(
-            nn.Conv1d(dim * 2, dim * 2, kernel_size=5, stride=2, padding=0, bias=False),
-            nn.BatchNorm1d(dim * 2),
-            Mish(),
-            SEModule(dim * 2, dim * 2 // 4),
-        )
-        self.layer6 = nn.Sequential(
-            nn.Conv1d(dim * 2, dim * 2, kernel_size=5, stride=2, padding=0, bias=False),
-            nn.BatchNorm1d(dim * 2),
-            Mish(),
-            SEModule(dim * 2, dim * 2 // 4),
-        )
-        self.layer7 = nn.Sequential(
-            nn.Conv1d(dim * 2, dim * 2, kernel_size=5, stride=2, padding=0, bias=False),
-            nn.BatchNorm1d(dim * 2),
-            Mish(),
-            SEModule(dim * 2, dim * 2 // 4),
-        )
-
-        self.maxpool = nn.MaxPool1d(2)
-        self.flatten = nn.Flatten()  # exam_levelでない、通常のstackingのときはこれ
-        in_size = dim * 2
-        if pool in ("avg", "concat", "gem", "max"):
-            self.pool = SEQ_POOLING[pool]
-            if pool == "concat":
-                in_size *= 2
-        else:
-            self.pool = None
-        self.head = nn.Sequential(nn.Linear(in_size, dim), nn.ReLU(inplace=True), nn.Dropout(0.8), nn.Linear(dim, num_classes))
-
-    def forward(self, x_input):
-        x_input = x_input.permute(0, 2, 1)
-        x = self.layer1(x_input)
-        # x = self.maxpool(x)
-        x = self.layer2(x)
-        x = self.layer3(x) + x
-        x = self.layer4(x) + x
-        x = self.layer5(x)
-        x = self.layer6(x)
-        # x = self.layer7(x)
-        if self.pool:
-            x = self.pool(x)
-        x = self.flatten(x)
-        x = self.head(x)
-
-        return x
 
 
 # wave_net
@@ -710,68 +470,6 @@ class Classifier(nn.Module):
         x = self.flatten(x)
         # print(x.shape)
         x = self.fc(x)  # bs,2
-
-        return x
-
-
-class CNN_1d_akiyama(nn.Module):
-    def __init__(self, num_classes=400, dim=16, input_ch=128, verbose=False, pool="concat"):
-        super(CNN_1d_akiyama, self).__init__()
-        self.layer1 = nn.Sequential(
-            nn.Conv1d(input_ch, dim, kernel_size=7, stride=1, padding=0, bias=False),
-            nn.BatchNorm1d(dim),
-            nn.ReLU(inplace=True),
-            # SEModule(dim, dim//4),
-        )
-        self.layer2 = nn.Sequential(
-            nn.Conv1d(dim, dim * 2, kernel_size=3, stride=2, padding=0, bias=False),
-            nn.BatchNorm1d(dim * 2),
-            nn.ReLU(inplace=True),
-            # SEModule(dim*2, dim*2//4),
-        )
-        self.layer3 = nn.Sequential(
-            nn.Conv1d(dim * 2, dim * 4, kernel_size=3, stride=2, padding=0, bias=False),
-            nn.BatchNorm1d(dim * 4),
-            nn.ReLU(inplace=True),
-            # SEModule(dim*2, dim*2//4),
-        )
-        self.layer4 = nn.Sequential(
-            nn.Conv1d(dim * 2, dim * 4, kernel_size=3, stride=2, padding=0, bias=False),
-            nn.BatchNorm1d(dim * 4),
-            nn.ReLU(inplace=True),
-            # SEModule(dim*2, dim*2//4),
-        )
-        self.layer5 = nn.Sequential(
-            nn.Conv1d(dim * 4, dim * 4, kernel_size=3, stride=2, padding=0, bias=False),
-            nn.BatchNorm1d(dim * 4),
-            nn.ReLU(inplace=True),
-            # SEModule(dim*2, dim*2//4),
-        )
-        self.maxpool = nn.MaxPool1d(2)
-        self.flatten = nn.Flatten()  # exam_levelでない、通常のstackingのときはこれ
-        in_size = dim * 4
-        if pool in ("avg", "concat", "gem", "max"):
-            self.pool = SEQ_POOLING[pool]
-            if pool == "concat":
-                in_size *= 2
-        else:
-            self.pool = None
-        self.head = nn.Sequential(nn.Linear(in_size, dim), nn.ReLU(inplace=True), nn.Dropout(0.8), nn.Linear(dim, num_classes))
-
-    def forward(self, x_input):
-        x_input = x_input.permute(0, 2, 1)
-        x = self.layer1(x_input)
-        x = self.maxpool(x)
-        # print(x.size())
-        x = self.layer2(x)
-        x = self.layer3(x)
-        # x = self.layer4(x)
-        x = self.layer4(x)
-        x = self.layer5(x)
-        if self.pool:
-            x = self.pool(x)
-        x = self.flatten(x)
-        x = self.head(x)
 
         return x
 
@@ -855,7 +553,7 @@ kernel_dict = {
 class stft_conv(nn.Module):
     def __init__(self, CFG):
         super(stft_conv, self).__init__()
-        self.conv = nn.Conv2d(2, kernel_dict[CFG.model.name], kernel_size=3, padding=1, stride=1, bias=False)
+        self.conv = nn.Conv2d(7, kernel_dict[CFG.model.name], kernel_size=3, padding=1, stride=1, bias=False)
         self.n_fft = 128  # 64 not work 256 not work
         # self.time_mask = torchaudio.transforms.TimeMasking(time_mask_param=CFG.augmentation.specaug_time)
         # self.frec_mask = torchaudio.transforms.FrequencyMasking(freq_mask_param=CFG.augmentation.specaug_frec)
@@ -1013,28 +711,15 @@ def train_fn(CFG, fold, folds):
     valid_loader = DataLoader(valid_dataset, batch_size=CFG.train.batch_size * 2, shuffle=False, num_workers=8)
 
     # === model select ===
-    # 系列モデル
-    if CFG.model.name == "inoichi":
-        model = transformer_inoichi(in_size=128, dim_feedforward=64, num_outputs=2, n_heads=2, n_encoders=1, pool="avg", embed=True)
-    elif CFG.model.name == "trans":
-        model = TransformerModel(in_size=12, dim_feedforward=64, num_outputs=5, n_heads=1, n_encoders=2, pool="avg", embed=True)
-    elif CFG.model.name == "gru":
-        model = gru_model(input_ch=7, pool="avg")
-    elif CFG.model.name == "idcnn":
-        model = CNN_1d(num_classes=5, input_ch=7, pool=CFG.model.pooling, dim=CFG.model.hidden_dim)
-    # 系列モデルおわり
     # STFTしてから2d cnn
-    model = timm.create_model(CFG.model.name, pretrained=True, num_classes=5)
-    if "convnext" in CFG.model.name:
-        model.stem[0] = stft_conv(CFG)
-    elif "nfnet" in CFG.model.name:
-        model.stem.conv1 = stft_conv_nfnet(CFG)
-    elif "maxvit" in CFG.model.name:
-        model.stem.conv1 = stft_conv_224(CFG)
-    else:
-        model.conv_stem = stft_conv(CFG)  # stft_conv_more(CFG)
-        # model.conv_stem = cwt_conv(CFG)
+    model = timm.create_model(CFG.model.name, pretrained=True, in_chans=7, num_classes=5)
+    print(model.conv_stem)
+
+    model.conv_stem = stft_conv(CFG)  # stft_conv_more(CFG)
+    # model.conv_stem = cwt_conv(CFG)
+    print(model.conv_stem)
     model.to(device)
+    print(model.conv_stem)
     # ============
 
     # === optim select ===
@@ -1057,7 +742,6 @@ def train_fn(CFG, fold, folds):
         criterion = FocalLoss_CE(alpha=1, gamma=CFG.loss.focal_gamma)
     # ============
     best_score = 0
-    # best_loss = np.inf
     best_preds = None
 
     softmax = nn.Softmax(dim=1)
@@ -1121,7 +805,7 @@ def train_fn(CFG, fold, folds):
             best_score = score
             best_preds = preds
             log.info(f"  Epoch {epoch+1} - Save Best Score: {best_score:.4f}")
-            torch.save(model.state_dict(), f"fold{fold}_{CFG.general.exp_num}_baseline.pth")
+            torch.save(model.state_dict(), f"{DIR_OUTPUT}/weights/fold{fold}_{CFG.general.exp_num}_baseline.pth")
         for i in range(5):
             col = f"pred_{i}"
             val_folds[col] = best_preds[:, i]
@@ -1137,7 +821,7 @@ def submit(test, CFG):
     probs = []
     # probs_rank = []
     for fold in range(5):
-        weights_path = f"fold{fold}_{CFG.general.exp_num}_baseline.pth"
+        weights_path = f"{DIR_OUTPUT}/weights/fold{fold}_{CFG.general.exp_num}_baseline.pth"
         if CFG.model.name == "trans":
             model = TransformerModel(in_size=32, dim_feedforward=64, num_outputs=2, n_heads=1, n_encoders=2, pool="avg", embed=True)
         elif CFG.model.name == "gru":
@@ -1159,14 +843,13 @@ config_path = "parameters/"
 log = logging.getLogger(__name__)
 
 
-@hydra.main(config_path=config_path, config_name="config.yaml")
+@hydra.main(version_base=None, config_path=config_path, config_name="config.yaml")
 def main(CFG: DictConfig) -> None:
-    # CFG = OmegaConf.to_yaml(cfg)
 
     seed_torch(seed=42)
-    log.info(f"===============exp_num{CFG.general.exp_num}============")
+    log.info(f"===============exp_num: {CFG.general.exp_num}============")
 
-    folds = pd.read_csv(f"{DIR_PROCESSED}/train_df0.csv")
+    folds = pd.read_csv(f"{DIR_PROCESSED}/train_df_fold.csv")
     tmp = folds[folds["id"] == "5edb9d9"]
     tmp = tmp[tmp["epoch"] == 1101]
     folds = folds.drop(index=tmp.index).reset_index(drop=True)
@@ -1189,21 +872,21 @@ def main(CFG: DictConfig) -> None:
     th_preds = np.argmax(preds, axis=1)
 
     acc = classification_report(valid_labels, th_preds)
-    log.info(f"  =====Acc====== {acc}")
+    log.info(f"  =====Acc====== \n{acc}")
 
     cm = confusion_matrix(valid_labels, th_preds)
-    log.info(f"  =====Acc======  {cm}")
+    log.info(f"  =====Acc====== \n{cm}")
 
     score = AUC(valid_labels, preds)
-    log.info(f"  =====AUC(CV)====== {score}")
-    oof.to_csv(f"oof_{CFG.general.exp_num}.csv", index=False)
+    log.info(f"  =====AUC(CV)====== \n{score}")
+    oof.to_csv(f"{DIR_OUTPUT}/oof_{CFG.general.exp_num}.csv", index=False)
 
     pred = submit(test, CFG)
 
     for i in range(5):
         col = f"pred_{i}"
         test[col] = pred[:, i]
-    test.to_csv("predict.csv", index=False)
+    test.to_csv(f"{DIR_OUTPUT}/predict_{CFG.general.exp_num}.csv", index=False)
     th_pred = np.argmax(pred, axis=1)
     submission = pd.read_csv(f"{DIR_INPUT}/sample_submission.csv")
     dic = {"Sleep stage 3/4": 3, "Sleep stage 2": 2, "Sleep stage W": 0, "Sleep stage R": 4, "Sleep stage 1": 1}
@@ -1219,7 +902,7 @@ def main(CFG: DictConfig) -> None:
     submission["condition"] = th_pred
     submission["condition"] = submission["condition"].apply(func2)
 
-    submission.to_csv(f"submit_{CFG.general.exp_num}.csv", index=False)
+    submission.to_csv(f"{DIR_OUTPUT}/submit_{CFG.general.exp_num}.csv", index=False)
 
 
 if __name__ == "__main__":
