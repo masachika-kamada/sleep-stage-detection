@@ -11,27 +11,16 @@ class stft_conv(nn.Module):
         super(stft_conv, self).__init__()
         self.conv = nn.Conv2d(7, KERNEL_DICT[CFG.model.name], kernel_size=3, padding=1, stride=1, bias=False)
         self.n_fft = 128  # 64 not work 256 not work
-        # self.time_mask = torchaudio.transforms.TimeMasking(time_mask_param=CFG.augmentation.specaug_time)
-        # self.frec_mask = torchaudio.transforms.FrequencyMasking(freq_mask_param=CFG.augmentation.specaug_frec)
         self.CFG = CFG
 
     def forward(self, x):
         x = self.torch_stft(x)  # 128:(7, 65, 180) 256:(7, 129, 86) 210:(7, 106, 108)
-        # batch_size = x.shape[0]
-        # if self.training:
-        #     index = torch.randperm(batch_size).cuda()
-        #     if self.CFG.augmentation.specaug_time>0:
-        #        x[index[len(index)//2:]]=self.time_mask(x[index[len(index)//2:]])
-        #     if self.CFG.augmentation.specaug_frec>0:
-        #        x[index[:len(index)//2]]=self.frec_mask(x[index[:len(index)//2]])
         x = self.conv(x)
         return x
 
     def torch_stft(self, X_train):
         signal = []
 
-        # index = np.arange(X_train.shape[1])
-        # np.random.shuffle(index)
         for s in range(X_train.shape[-1]):
             spectral = torch.stft(X_train[:, :, s], n_fft=self.n_fft, hop_length=self.n_fft * 1 // 4,
                                   center=False, onesided=True, return_complex=False)
@@ -60,8 +49,6 @@ class stft_conv_nfnet(nn.Module):
     def torch_stft(self, X_train):
         signal = []
 
-        # index = np.arange(X_train.shape[1])
-        # np.random.shuffle(index)
         for s in range(X_train.shape[-1]):
             spectral = torch.stft(X_train[:, :, s], n_fft=self.n_fft, hop_length=self.n_fft * 1 // 4,
                                   center=False, onesided=True, return_complex=False)
@@ -100,8 +87,6 @@ class stft_conv_more(nn.Module):
     def torch_stft(self, X_train):
         signal = []
 
-        # index = np.arange(X_train.shape[1])
-        # np.random.shuffle(index)
         for s in range(X_train.shape[-1]):
             spectral = torch.stft(X_train[:, :, s], n_fft=self.n_fft, hop_length=self.n_fft * 1 // 4,
                                   center=False, onesided=True, return_complex=False)
@@ -130,8 +115,6 @@ class stft_conv_224(nn.Module):
     def torch_stft(self, X_train):
         signal = []
 
-        # index = np.arange(X_train.shape[1])
-        # np.random.shuffle(index)
         for s in range(X_train.shape[-1]):
             spectral = torch.stft(X_train[:, :, s], n_fft=self.n_fft, hop_length=self.n_fft * 1 // 4,
                                   center=False, onesided=True, return_complex=False)
