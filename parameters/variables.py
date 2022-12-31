@@ -19,7 +19,8 @@ LABEL2ID = {
     "Sleep stage 3/4": 3,
     "Sleep stage R": 4
 }
-ID2LABEL = {v:k for k, v in LABEL2ID.items()}
+
+ID2LABEL = {v: k for k, v in LABEL2ID.items()}
 
 COLS = [
     "EEG Fpz-Cz",
@@ -30,3 +31,15 @@ COLS = [
     "Temp rectal",
     "Event marker"
 ]
+
+KERNEL_DICT = {
+    "tf_efficientnet_b0_ns": 32,
+    "tf_efficientnet_b2_ns": 32,
+    "tf_efficientnetv2_s": 24,
+    "tf_efficientnetv2_m": 24,
+    "tf_efficientnet_b5_ns": 48,
+    "tf_efficientnetv2_l": 32,
+    "convnext_nano": 80,
+    "convnext_tiny": 96,
+    "convnext_small": 96,
+}
