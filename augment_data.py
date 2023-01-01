@@ -3,6 +3,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from parameters.data_path import DIR_ARRAYS, DIR_PROCESSED
+from utils.kfold import create_folds
 
 
 def main():
@@ -45,6 +46,10 @@ def main():
     df = pd.concat([df, df_cross], axis=0)
     df = df.groupby("id").apply(lambda x: x.sort_values("meas_time"))
     df.to_csv(f"{DIR_PROCESSED}/train_df_augument.csv", index=False)
+
+    df = pd.read_csv(f"{DIR_PROCESSED}/train_df_augument.csv")
+    folds = create_folds(df)
+    folds.to_csv(f"{DIR_PROCESSED}/train_df_augunemt_fold.csv", index=False)
 
 
 if __name__ == "__main__":
