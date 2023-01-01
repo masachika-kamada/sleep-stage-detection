@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 from parameters.data_path import DIR_INPUT, DIR_OUTPUT, DIR_PROCESSED
 from parameters.variables import ID2LABEL
-from utils.conv_stem import stft_conv
+from utils.conv_stem import stft_conv, stft_conv_more, cwt_conv
 from utils.datasets import TestDataset, TrainDataset
 from utils.metrics import AUC
 from utils.mixup import mixup_data, mixup_criterion
@@ -68,14 +68,15 @@ def train_fn(CFG, fold, folds):
 
     # === model select ===
     model = timm.create_model(CFG.model.name, pretrained=True, in_chans=7, num_classes=5)
-    model.conv_stem = stft_conv(CFG)  # stft_conv_more(CFG)
+    model.conv_stem = stft_conv(CFG)
+    # model.conv_stem = stft_conv_more(CFG)
     # model.conv_stem = cwt_conv(CFG)
     model.to(device)
     print(model.conv_stem)
 
     # === optim select ===
     if CFG.train.optim == "adam":
-        optimizer = AdamW(model.parameters(), lr=CFG.train.lr, amsgrad=False)  # CFG.train.lr
+        optimizer = AdamW(model.parameters(), lr=CFG.train.lr, amsgrad=False)
 
     # === scheduler select ===
     if CFG.train.scheduler.name == "cosine":
@@ -89,7 +90,7 @@ def train_fn(CFG, fold, folds):
     if CFG.loss.name == "ce":
         criterion = nn.CrossEntropyLoss(label_smoothing=CFG.loss.smooth_a)
     elif CFG.loss.name == "focal":
-        criterion = FocalLoss_CE(alpha=1, gamma=CFG.loss.focal_gamma)
+        criterion = FocalLoss_CE(alpha=CFG.loss.focal_alpha, gamma=CFG.loss.focal_gamma)
 
     best_score = 0
     best_preds = None
@@ -102,7 +103,6 @@ def train_fn(CFG, fold, folds):
         avg_loss = 0.0
 
         tk0 = tqdm(enumerate(train_loader), total=len(train_loader))
-
         for i, (images, labels) in tk0:
             optimizer.zero_grad()
             images = images.to(device)
@@ -128,8 +128,8 @@ def train_fn(CFG, fold, folds):
         avg_val_loss = 0.0
         preds = []
         valid_labels = []
-        tk1 = tqdm(enumerate(valid_loader), total=len(valid_loader))
 
+        tk1 = tqdm(enumerate(valid_loader), total=len(valid_loader))
         for i, (images, labels) in tk1:
             images = images.to(device)
             labels = labels.to(device)
@@ -172,7 +172,9 @@ def pred_fn(test, CFG):
     for fold in range(5):
         weights_path = f"{DIR_OUTPUT}/weights/fold{fold}_{CFG.general.exp_num}.pth"
         model = timm.create_model(CFG.model.name, pretrained=True, num_classes=5)
-        model.conv_stem = stft_conv(CFG)  # stft_conv_more(CFG)
+        model.conv_stem = stft_conv(CFG)
+        # model.conv_stem = stft_conv_more(CFG)
+        # model.conv_stem = cwt_conv(CFG)
         state_dict = torch.load(weights_path, map_location=device)
         model.load_state_dict(state_dict)
 
@@ -188,7 +190,7 @@ log = logging.getLogger(__name__)
 @hydra.main(version_base=None, config_path="parameters/", config_name="config.yaml")
 def main(CFG: DictConfig) -> None:
 
-    seed_torch(seed=42)
+    seed_torch(seed=CFG.general.seed)
     log.info(f"===== exp_num: {CFG.general.exp_num} =====")
 
     folds = pd.read_csv(f"{DIR_PROCESSED}/train_df_fold.csv")
