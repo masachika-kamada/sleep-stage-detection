@@ -1,14 +1,18 @@
 general:
   debug: False
-  exp_num: "ch7_221231"
+  exp_num: "ch7_230101"
   device: 0
+  seed: 42
   task:
-    name: "clf" #"mlti_clf"
+    name: "clf"  # "mlti_clf"
+  train_file: "train_df_fold"
+
 loss:
-  name: "ce"
+  name: "ce" # "ce", "focal"
   weights: 0
   smooth_a: 0.05
-  focal_gamma: 0
+  focal_alpha: 0.25
+  focal_gamma: 2
 
 augmentation:
   specaug_time: 0
@@ -23,9 +27,9 @@ augmentation:
   swap_axis: 0
   t_strech: 0 #error
   t_shift: 0
-  t_shift_mode: "zero" #"cocat" "repalce"
+  t_shift_mode: "zero"  # "cocat", "repalce"
   v_cont: 0
-  v_mode: "uniform" #"uniform", "fade", "cosine", "sine"]
+  v_mode: "uniform"  # "uniform", "fade", "cosine", "sine"
   crop_total: 700
 
 model:
@@ -34,6 +38,7 @@ model:
   pooling: "avg"
   n_classes: 5
   hidden_dim: 128
+  conv_stem: "stft_conv"  # "stft_conv_more", "cwt_conv"
 
 tta:
   do: False
@@ -46,6 +51,6 @@ train:
   epochs: 5
   batch_size: 128
   scheduler:
-    name: "none" #"none","cosine_warm","cosine"
+    name: "none"  # "none", "cosine_warm", "cosine"
     min_lr: 0.00001
     t_0: 3

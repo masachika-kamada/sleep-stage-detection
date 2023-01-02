@@ -68,9 +68,12 @@ def train_fn(CFG, fold, folds):
 
     # === model select ===
     model = timm.create_model(CFG.model.name, pretrained=True, in_chans=7, num_classes=5)
-    model.conv_stem = stft_conv(CFG)
-    # model.conv_stem = stft_conv_more(CFG)
-    # model.conv_stem = cwt_conv(CFG)
+    if CFG.model.conv_stem == "stft_conv":
+        model.conv_stem = stft_conv(CFG)
+    elif CFG.model.conv_stem == "stft_conv_more":
+        model.conv_stem = stft_conv_more(CFG)
+    elif CFG.model.conv_stem == "cwt_conv":
+        model.conv_stem = cwt_conv(CFG)
     model.to(device)
     print(model.conv_stem)
 
@@ -172,9 +175,12 @@ def pred_fn(test, CFG):
     for fold in range(5):
         weights_path = f"{DIR_OUTPUT}/weights/fold{fold}_{CFG.general.exp_num}.pth"
         model = timm.create_model(CFG.model.name, pretrained=True, num_classes=5)
-        model.conv_stem = stft_conv(CFG)
-        # model.conv_stem = stft_conv_more(CFG)
-        # model.conv_stem = cwt_conv(CFG)
+        if CFG.model.conv_stem == "stft_conv":
+            model.conv_stem = stft_conv(CFG)
+        elif CFG.model.conv_stem == "stft_conv_more":
+            model.conv_stem = stft_conv_more(CFG)
+        elif CFG.model.conv_stem == "cwt_conv":
+            model.conv_stem = cwt_conv(CFG)
         state_dict = torch.load(weights_path, map_location=device)
         model.load_state_dict(state_dict)
 
@@ -193,7 +199,7 @@ def main(CFG: DictConfig) -> None:
     seed_torch(seed=CFG.general.seed)
     log.info(f"===== exp_num: {CFG.general.exp_num} =====")
 
-    folds = pd.read_csv(f"{DIR_PROCESSED}/train_df_fold.csv")
+    folds = pd.read_csv(f"{DIR_PROCESSED}/{CFG.general.train_file}.csv")
     tmp = folds[folds["id"] == "5edb9d9"]
     tmp = tmp[tmp["epoch"] == 1101]
     folds = folds.drop(index=tmp.index).reset_index(drop=True)
