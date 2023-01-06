@@ -1,8 +1,6 @@
-import os
-
 import pandas as pd
 
-from parameters.data_path import DIR_ARRAYS, DIR_EDF, DIR_INPUT, DIR_PROCESSED
+from parameters.data_path import DIR_EDF, DIR_INPUT, DIR_PROCESSED
 from utils.data_conversion import create_annoation_df
 from utils.kfold import create_folds
 
@@ -14,8 +12,6 @@ def main():
 
     test_record_df = pd.read_csv(f"{DIR_INPUT}/test_records.csv")
     test_record_df["psg"] = DIR_EDF + "/" + test_record_df["psg"]
-
-    os.makedirs(DIR_ARRAYS, exist_ok=True)
 
     train_df = create_annoation_df(train_record_df, is_test=False)
     train_df.to_csv(f"{DIR_PROCESSED}/train_df0.csv", index=False)
