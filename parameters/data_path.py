@@ -10,3 +10,7 @@ DIR_PROCESSED = os.path.abspath("data/processed")
 for path in [DIR_INPUT, DIR_EDF, DIR_ARRAYS, DIR_OUTPUT, DIR_PROCESSED]:
     if not os.path.exists(path):
         os.makedirs(path)
+
+for d in ["logs", "oofs", "predicts", "submits", "weights"]:
+    if not os.path.exists(f"{DIR_OUTPUT}/{d}"):
+        os.makedirs(f"{DIR_OUTPUT}/{d}")
