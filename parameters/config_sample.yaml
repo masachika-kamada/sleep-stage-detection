@@ -1,14 +1,33 @@
 general:
   debug: False
-  exp_num: "ch7_230101"
+  exp_num: "ch7_230107"
   device: 0
   seed: 42
   task:
-    name: "clf"  # "mlti_clf"
-  train_file: "train_df_fold"
+    name: "clf"  # "clf", "mlti_clf"
+  train_file: "train_df_augument_fold"
+  n_fold: 5
+
+train:
+  optim: "adam"
+  lr: 0.001
+  epochs: 5
+  batch_size: 128
+  scheduler:
+    name: "cosine"  # "none", "cosine_warm", "cosine"
+    min_lr: 0.00001
+    t_0: 3
+
+model:
+  name: "tf_efficientnet_b0_ns"
+  pretrain: -1
+  pooling: "avg"
+  n_classes: 5
+  hidden_dim: 128
+  conv_stem: "stft_conv"  # "stft_conv_more", "cwt_conv"
 
 loss:
-  name: "ce" # "ce", "focal"
+  name: "focal"
   weights: 0
   smooth_a: 0.05
   focal_alpha: 0.25
@@ -32,25 +51,7 @@ augmentation:
   v_mode: "uniform"  # "uniform", "fade", "cosine", "sine"
   crop_total: 700
 
-model:
-  name: "tf_efficientnet_b0_ns"
-  pretrain: -1
-  pooling: "avg"
-  n_classes: 5
-  hidden_dim: 128
-  conv_stem: "stft_conv"  # "stft_conv_more", "cwt_conv"
-
 tta:
   do: False
 
 mixup: 0.5
-
-train:
-  optim: "adam"
-  lr: 0.001
-  epochs: 5
-  batch_size: 128
-  scheduler:
-    name: "none"  # "none", "cosine_warm", "cosine"
-    min_lr: 0.00001
-    t_0: 3
