@@ -1,6 +1,8 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.metrics import accuracy_score, roc_auc_score
+import seaborn as sns
+from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score
 
 
 def AUC(y_true, y_pred, onehot=False):
@@ -24,9 +26,31 @@ def get_acc(y_true, y_pred):
     return acc
 
 
+def get_acc_from_csv(fname):
+    df = pd.read_csv(fname)
+    y_true = df["label"].values
+    y_pred = df[["pred_0", "pred_1", "pred_2", "pred_3", "pred_4"]].values
+    return get_acc(y_true, y_pred)
+
+
+def save_confusion_matrix(y_true, y_pred, fname):
+    fig, ax = plt.subplots()
+    cm = confusion_matrix(y_true, y_pred)
+    labels = ["0", "1", "2", "3", "4"]
+    cm = pd.DataFrame(data=cm, index=labels, columns=labels)
+    cm_normalized = cm.div(cm.sum(axis=1), axis=0)
+
+    sns.heatmap(cm_normalized, square=True, cbar=True, annot=True, cmap="Blues")
+    plt.yticks(rotation=0)
+    plt.xlabel("Pred", fontsize=13, rotation=0)
+    plt.ylabel("GT", fontsize=13)
+    ax.set_ylim(len(cm_normalized), 0)
+    plt.savefig(fname)
+
+
 if __name__ == "__main__":
-    fname = "oof_ch7_230101_fmore.csv"
-    df = pd.read_csv(f"data/output/{fname}")
+    fname = "oof_ch7_230102_aug.csv"
+    df = pd.read_csv(f"data/output/oofs/{fname}")
     y_true = df["label"].values
     y_pred = df[["pred_0", "pred_1", "pred_2", "pred_3", "pred_4"]].values
     print(y_true.shape, y_pred.shape)
