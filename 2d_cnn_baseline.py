@@ -12,9 +12,7 @@ import torch.nn as nn
 from omegaconf import DictConfig
 from sklearn.metrics import accuracy_score, classification_report
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import (CosineAnnealingLR,
-                                      CosineAnnealingWarmRestarts,
-                                      ReduceLROnPlateau)
+from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts, ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -49,6 +47,40 @@ def inference(model, test_loader, device, CFG):
             y_preds = softmax(y_preds)
         probs.append(y_preds.to("cpu").numpy())
 
+    probs = np.concatenate(probs)
+    return probs
+
+
+# dataAugmentation付きの推論で使用
+def cropaug(seq, crop_len):
+    l_ = np.random.randint(crop_len)
+    r = np.random.randint(crop_len)
+    seq[:, :l_, :] = 0
+    seq[:, -r:, :] = 0
+    return seq
+
+
+def inference_tta(model, test_loader, device, CFG):
+    model.to(device)
+    model.eval()
+    probs = []
+
+    for i, images in tqdm(enumerate(test_loader), total=len(test_loader)):
+        images = images.to(device)
+        with torch.no_grad():
+            y_pred = []
+            for i in range(2):
+                if i == 0:
+                    augmented_image = images
+                else:
+                    augmented_image = cropaug(images, crop_len=CFG.augmentation.crop_len)
+
+                y_preds, _ = model(augmented_image)
+                softmax = nn.Softmax(dim=1)
+                y_preds = softmax(y_preds)
+                y_pred.append(y_preds.to("cpu").numpy())
+            y_pred = np.mean(np.stack(y_pred, axis=0), axis=0)
+        probs.append(y_pred)
     probs = np.concatenate(probs)
     return probs
 
@@ -181,7 +213,10 @@ def pred_fn(test, CFG):
         state_dict = torch.load(weights_path, map_location=device)
         model.load_state_dict(state_dict)
 
-        _probs = inference(model, test_loader, device, CFG)
+        if CFG.tta:
+            _probs = inference_tta(model, test_loader, device, CFG)
+        else:
+            _probs = inference(model, test_loader, device, CFG)
         probs.append(_probs)
     probs = np.mean(probs, axis=0)
     return probs
