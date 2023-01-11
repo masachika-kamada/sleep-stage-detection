@@ -45,11 +45,11 @@ def main():
     df_cross = pd.DataFrame(data_cross, columns=["epoch", "meas_time", "label", "id"])
     df = pd.concat([df, df_cross], axis=0)
     df = df.groupby("id").apply(lambda x: x.sort_values("meas_time"))
-    df.to_csv(f"{DIR_PROCESSED}/train_df_augument.csv", index=False)
+    df.to_csv(f"{DIR_PROCESSED}/train_df_augment.csv", index=False)
 
-    df = pd.read_csv(f"{DIR_PROCESSED}/train_df_augument.csv")
+    df = pd.read_csv(f"{DIR_PROCESSED}/train_df_augment.csv")
     folds = create_folds(df)
-    folds.to_csv(f"{DIR_PROCESSED}/train_df_augument_fold.csv", index=False)
+    folds.to_csv(f"{DIR_PROCESSED}/train_df_augment_fold.csv", index=False)
 
 
 if __name__ == "__main__":

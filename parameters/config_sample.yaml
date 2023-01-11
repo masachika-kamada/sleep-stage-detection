@@ -5,7 +5,7 @@ general:
   seed: 42
   task:
     name: "clf"  # "clf", "mlti_clf"
-  train_file: "train_df_augument_fold"
+  train_file: "train_df_augment_fold"
   n_fold: 5
 
 train:
