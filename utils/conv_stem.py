@@ -12,8 +12,8 @@ class stft_conv(nn.Module):
         super(stft_conv, self).__init__()
         self.conv = nn.Conv2d(7, KERNEL_DICT[CFG.model.name], kernel_size=3, padding=1, stride=1, bias=False)
         self.n_fft = 128  # 64 not work 256 not work
-        self.time_mask = torchaudio.transforms.TimeMasking(time_mask_param=CFG.specaug_time)       # ms
-        self.frec_mask = torchaudio.transforms.FrequencyMasking(freq_mask_param=CFG.specaug_frec)  # hz
+        self.time_mask = torchaudio.transforms.TimeMasking(time_mask_param=CFG.augmentation.specaug_time)       # ms
+        self.frec_mask = torchaudio.transforms.FrequencyMasking(freq_mask_param=CFG.augmentation.specaug_frec)  # hz
         self.CFG = CFG
 
     def forward(self, x):
@@ -21,9 +21,9 @@ class stft_conv(nn.Module):
         batch_size = x.shape[0]
         if self.training:
             index = torch.randperm(batch_size).cuda()
-            if self.CFG.specaug_time > 0:
+            if self.CFG.augmentation.specaug_time > 0:
                 x[index[len(index) // 2 :]] = self.time_mask(x[index[len(index) // 2 :]])
-            if self.CFG.specaug_frec > 0:
+            if self.CFG.augmentation.specaug_frec > 0:
                 x[index[: len(index) // 2]] = self.frec_mask(x[index[: len(index) // 2]])
         x = self.conv(x)
         return x
