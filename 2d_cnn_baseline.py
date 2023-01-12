@@ -34,23 +34,6 @@ def seed_torch(seed=42):
     torch.backends.cudnn.deterministic = True
 
 
-def inference(model, test_loader, device, CFG):
-    model.to(device)
-    model.eval()
-    probs = []
-    softmax = nn.Softmax(dim=1)
-
-    for i, images in tqdm(enumerate(test_loader), total=len(test_loader)):
-        images = images.to(device)
-        with torch.no_grad():
-            y_preds = model(images)
-            y_preds = softmax(y_preds)
-        probs.append(y_preds.to("cpu").numpy())
-
-    probs = np.concatenate(probs)
-    return probs
-
-
 # dataAugmentation付きの推論で使用
 def cropaug(seq, crop_len):
     l_ = np.random.randint(crop_len)
@@ -60,27 +43,32 @@ def cropaug(seq, crop_len):
     return seq
 
 
-def inference_tta(model, test_loader, device, CFG):
+def inference(model, test_loader, device, CFG):
     model.to(device)
     model.eval()
     probs = []
+    softmax = nn.Softmax(dim=1)
 
     for i, images in tqdm(enumerate(test_loader), total=len(test_loader)):
         images = images.to(device)
         with torch.no_grad():
-            y_pred = []
-            for i in range(2):
-                if i == 0:
-                    augmented_image = images
-                else:
-                    augmented_image = cropaug(images, crop_len=CFG.augmentation.crop_len)
-
-                y_preds, _ = model(augmented_image)
-                softmax = nn.Softmax(dim=1)
+            if CFG.tta.do is False:
+                y_preds = model(images)
                 y_preds = softmax(y_preds)
-                y_pred.append(y_preds.to("cpu").numpy())
-            y_pred = np.mean(np.stack(y_pred, axis=0), axis=0)
-        probs.append(y_pred)
+            else:
+                y_pred = []
+                for i in range(2):
+                    if i == 0:
+                        augmented_image = images
+                    else:
+                        augmented_image = cropaug(images, crop_len=CFG.augmentation.crop_len)
+
+                    y_preds = model(augmented_image)
+                    y_preds = softmax(y_preds)
+                    y_pred.append(y_preds.to("cpu").numpy())
+                y_pred = np.mean(np.stack(y_pred, axis=0), axis=0)
+        probs.append(y_preds.to("cpu").numpy())
+
     probs = np.concatenate(probs)
     return probs
 
@@ -213,10 +201,7 @@ def pred_fn(test, CFG):
         state_dict = torch.load(weights_path, map_location=device)
         model.load_state_dict(state_dict)
 
-        if CFG.tta:
-            _probs = inference_tta(model, test_loader, device, CFG)
-        else:
-            _probs = inference(model, test_loader, device, CFG)
+        _probs = inference(model, test_loader, device, CFG)
         probs.append(_probs)
     probs = np.mean(probs, axis=0)
     return probs
