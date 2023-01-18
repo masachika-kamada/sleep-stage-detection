@@ -1,6 +1,6 @@
 general:
   debug: False
-  exp_num: "ch7_230107"
+  exp_num: "230118_b0_meta"
   device: 0
   seed: 42
   task:
@@ -11,7 +11,7 @@ general:
 train:
   optim: "adam"
   lr: 0.001
-  epochs: 5
+  epochs: 1
   batch_size: 128
   scheduler:
     name: "cosine"  # "none", "cosine_warm", "cosine"
@@ -19,7 +19,7 @@ train:
     t_0: 3
 
 model:
-  name: "tf_efficientnet_b0_ns"
+  name: "efficientnet_b0"  # "efficientnet_b0", "tf_efficientnet_b0_ns"
   pretrain: -1
   pooling: "avg"
   n_classes: 5
@@ -44,7 +44,7 @@ augmentation:
   min_snr: 5
   max_snr: 20
   swap_axis: 0
-  t_strech: 0 #error
+  t_strech: 0  #error
   t_shift: 0
   t_shift_mode: "zero"  # "cocat", "repalce"
   v_cont: 0
@@ -52,6 +52,10 @@ augmentation:
   crop_total: 700
 
 tta:
-  do: False
+  do: True
 
-mixup: 0.5
+mixup: 0
+
+metadata:
+  use: True
+  n_features: 5

@@ -7,9 +7,10 @@ from parameters.data_path import DIR_ARRAYS
 
 
 class TrainDataset(Dataset):
-    def __init__(self, df, CFG, train=True):
+    def __init__(self, df, CFG):
         self.df = df
         self.CFG = CFG
+        self.meta_cols = ["night", "age", "sex", "label_before", "sleep_duration"]
 
     def __len__(self):
         return len(self.df)
@@ -52,14 +53,17 @@ class TrainDataset(Dataset):
         seq = torch.from_numpy(seq).float()
         label = torch.tensor(label).long()
 
-        return seq, label
+        if self.CFG.metadata.use is False:
+            return seq, label
+        else:
+            metadata = self.df[self.meta_cols].values[idx]
+            metadata = torch.tensor(metadata)
+            return [seq, metadata], label
 
 
 class TestDataset(Dataset):
-    def __init__(self, df, CFG, train=True, transform1=None, transform2=None):
+    def __init__(self, df, CFG):
         self.df = df
-        self.transform = transform1
-        self.transform_ = transform2
         self.CFG = CFG
 
     def __len__(self):
@@ -70,4 +74,9 @@ class TestDataset(Dataset):
         epoch = self.df["epoch"].values[idx]
         seq = np.load(f"{DIR_ARRAYS}/{id_}_{epoch}.npy")
         seq = torch.from_numpy(seq).float()
-        return seq
+        if self.CFG.metadata.use is False:
+            return seq
+        else:
+            metadata = self.df[self.meta_cols].values[idx]
+            metadata = torch.tensor(metadata)
+            return [seq, metadata]
