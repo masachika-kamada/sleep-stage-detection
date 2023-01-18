@@ -10,7 +10,7 @@ class TrainDataset(Dataset):
     def __init__(self, df, CFG):
         self.df = df
         self.CFG = CFG
-        self.meta_cols = ["night", "age", "sex", "label_before", "sleep_duration"]
+        self.meta_cols = ["night", "age", "sex", "sleep_duration", "label_before"]
 
     def __len__(self):
         return len(self.df)
@@ -65,6 +65,7 @@ class TestDataset(Dataset):
     def __init__(self, df, CFG):
         self.df = df
         self.CFG = CFG
+        self.meta_cols = ["night", "age", "sex", "sleep_duration"]
 
     def __len__(self):
         return len(self.df)

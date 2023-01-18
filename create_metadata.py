@@ -15,14 +15,14 @@ def add_metadata(df, df_input):
         df_["sex"] = df_input["sex"][i]
         df_["sex"].replace({"male": 0, "female": 1}, inplace=True)
 
-        if "label" in df_.columns:
-            df_["label_before"] = df_["label"].shift(1)
-            df_["label_before"] = df_["label_before"].fillna(df_["label"])
-
         # df_train_idに最初の測定からの経過時間を追加
         df_["meas_time"] = pd.to_datetime(df_["meas_time"])
         df_["sleep_duration"] = (df_["meas_time"] - df_["meas_time"].iloc[0]).dt.total_seconds() / 60
         df_["sleep_duration"] = df_["sleep_duration"].round(1)
+
+        if "label" in df_.columns:
+            df_["label_before"] = df_["label"].shift(1)
+            df_["label_before"] = df_["label_before"].fillna(df_["label"])
 
         df_list.append(df_)
 

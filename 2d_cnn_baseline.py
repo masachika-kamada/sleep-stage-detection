@@ -48,14 +48,16 @@ def inference(model, test_loader, device, CFG):
     model.eval()
     probs = []
     softmax = nn.Softmax(dim=1)
+    prev_pred = 1
 
     for i, data in tqdm(enumerate(test_loader), total=len(test_loader)):
         with torch.no_grad():
             if CFG.metadata.use is True:
                 images = data[0].to(device)
-                metadata = data[1].to(device)
+                metadata = torch.cat([data[1], torch.tensor([prev_pred])]).to(device)
                 y_preds = model(images.float(), metadata.float())
                 y_preds = softmax(y_preds)
+                prev_pred = torch.argmax(y_preds).item()
             elif CFG.tta.do is False:
                 images = data.to(device)
                 y_preds = model(images)
@@ -206,7 +208,8 @@ def pred_fn(test, CFG):
     torch.cuda.set_device(CFG.general.device)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     test_dataset = TestDataset(test, CFG=CFG)
-    test_loader = DataLoader(test_dataset, batch_size=CFG.train.batch_size * 2, shuffle=False)
+    test_batch_size = CFG.train.batch_size * 2 if CFG.metadata.use is False else 1
+    test_loader = DataLoader(test_dataset, batch_size=test_batch_size, shuffle=False)
     probs = []
     for fold in range(CFG.general.n_fold):
         weights_path = f"{DIR_OUTPUT}/weights/fold{fold}_{CFG.general.exp_num}.pth"
