@@ -32,12 +32,15 @@ def add_metadata(df, df_input):
 
 def main():
     df_train = pd.read_csv(f"{DIR_PROCESSED}/train_df_fold.csv")
+    df_train_aug = pd.read_csv(f"{DIR_PROCESSED}/train_df_augment_fold.csv")
     df_train_input = pd.read_csv(f"{DIR_INPUT}/train_records.csv")
     df_test = pd.read_csv(f"{DIR_PROCESSED}/test_df0.csv")
     df_test_input = pd.read_csv(f"{DIR_INPUT}/test_records.csv")
 
     df_train_meta = add_metadata(df_train, df_train_input)
     df_train_meta.to_csv(f"{DIR_PROCESSED}/train_df_meta.csv", index=False)
+    df_train_meta_aug = add_metadata(df_train_aug, df_train_input)
+    df_train_meta_aug.to_csv(f"{DIR_PROCESSED}/train_df_augment_meta.csv", index=False)
     df_test_meta = add_metadata(df_test, df_test_input)
     df_test_meta.to_csv(f"{DIR_PROCESSED}/test_df_meta.csv", index=False)
 

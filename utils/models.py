@@ -17,7 +17,7 @@ def efficientnet(CFG):
 
 
 class efficientnet_with_metadata(nn.Module):
-    def __init__(self, CFG, n_meta_features=0, out_dim=5, n_meta_dim=[512, 128]):
+    def __init__(self, CFG, n_meta_features=0, out_dim=5, n_meta_dim=[32, 16]):
         super(efficientnet_with_metadata, self).__init__()
         self.n_meta_features = n_meta_features
         self.CFG = CFG
