@@ -23,12 +23,15 @@ class efficientnet_with_metadata(nn.Module):
         self.CFG = CFG
         self.efficientnet = efficientnet(CFG)
         self.efficientnet.classifier = torch.nn.Identity()
-        self.cnn_features_size = {"efficientnet_b0": 1280}
+        self.cnn_features_size = {
+            "efficientnet_b0": 1280,
+            "tf_efficientnet_b0_ns": 1280
+        }
 
         self.dropouts = nn.ModuleList([
             nn.Dropout(0.5) for _ in range(5)
         ])
-        in_ch = self.cnn_features_size["efficientnet_b0"]
+        in_ch = self.cnn_features_size[CFG.model.name]
         if n_meta_features > 0:
             self.meta = nn.Sequential(
                 nn.Linear(n_meta_features, n_meta_dim[0]),
