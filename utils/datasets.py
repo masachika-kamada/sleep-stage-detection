@@ -2,7 +2,9 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from code_factory.seq_aug import AddGaussianNoise, GaussianNoiseSNR, TimeShift, TimeStretch
+from code_factory.seq_aug import (AddGaussianNoise, GaussianNoiseSNR,
+                                  PinkNoiseSNR, RandomCrop, TimeShift,
+                                  TimeStretch, VolumeControl)
 from parameters.data_path import DIR_ARRAYS
 
 
@@ -80,4 +82,5 @@ class TestDataset(Dataset):
         else:
             metadata = self.df[self.meta_cols].values[idx]
             metadata = torch.tensor(metadata)
-            return [seq, metadata]
+            epoch = self.df["epoch"].values[idx]
+            return [seq, metadata, epoch]

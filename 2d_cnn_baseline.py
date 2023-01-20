@@ -48,13 +48,15 @@ def inference(model, test_loader, device, CFG):
     model.eval()
     probs = []
     softmax = nn.Softmax(dim=1)
-    prev_pred = 1
 
     for i, data in tqdm(enumerate(test_loader), total=len(test_loader)):
         with torch.no_grad():
             if CFG.metadata.use is True:
-                images = data[0].to(device)
-                metadata = torch.cat([data[1], torch.tensor([[prev_pred]])], dim=1).to(device)
+                images, metadata, epoch = data
+                if epoch == 0:
+                    prev_pred = 0
+                images = images.to(device)
+                metadata = torch.cat([metadata, torch.tensor([[prev_pred]])], dim=1).to(device)
                 y_preds = model(images.float(), metadata.float())
                 y_preds = softmax(y_preds)
                 prev_pred = torch.argmax(y_preds).item()
@@ -236,8 +238,8 @@ def main(CFG: DictConfig) -> None:
         folds = pd.read_csv(f"{DIR_PROCESSED}/{CFG.general.train_file}.csv")
         test = pd.read_csv(f"{DIR_PROCESSED}/test_df0.csv")
     else:
-        # folds = pd.read_csv(f"{DIR_PROCESSED}/train_df_meta.csv")
-        folds = pd.read_csv(f"{DIR_PROCESSED}/train_df_augment_meta.csv")
+        folds = pd.read_csv(f"{DIR_PROCESSED}/train_df_meta.csv")
+        # folds = pd.read_csv(f"{DIR_PROCESSED}/train_df_augment_meta.csv")
         test = pd.read_csv(f"{DIR_PROCESSED}/test_df_meta.csv")
     tmp = folds[folds["id"] == "5edb9d9"]
     tmp = tmp[tmp["epoch"] == 1101]
