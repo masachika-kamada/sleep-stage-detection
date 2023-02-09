@@ -17,4 +17,4 @@
 - 以下の 2 つのネットワークの出力を結合して予測
   - 波形をスペクトログラム画像に変換し EfficientNet で睡眠段階を予測
   - メタデータを入力し 2 層 NN で睡眠段階を予測
-- 詳細は [こちら](https://www.nishika.com/competitions/sleep/topics/445)（この解法内の model2 が本リポジトリです）
+- 詳細は [こちら](https://competition.nishika.com/sleep/topics/445)（この解法内の model2 が本リポジトリです）
